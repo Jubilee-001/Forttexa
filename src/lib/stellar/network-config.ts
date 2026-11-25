@@ -17,7 +17,48 @@ export function getStellarHorizonUrl(): string {
 }
 
 export function getStellarNetworkPassphrase(): string {
-  return process.env.STELLAR_NETWORK_PASSPHRASE ?? Networks.TESTNET;
+  const raw = process.env.STELLAR_NETWORK_PASSPHRASE;
+  if (raw === undefined || raw === null) {
+    return Networks.TESTNET;
+  }
+  validateStellarNetworkPassphrase(raw);
+  return raw;
+}
+
+/** Maximum allowed length for a configured Stellar network passphrase. */
+const MAX_NETWORK_PASSPHRASE_LENGTH = 256;
+
+/** Control characters (C0/C1 controls and DEL) never valid in a passphrase. */
+const CONTROL_CHARACTER = /[\u0000-\u001f\u007f-\u009f]/;
+
+/**
+ * Validates the configured Stellar network passphrase before it is used to
+ * sign or verify transactions. A malformed passphrase can produce signatures
+ * for the wrong network, so invalid values are rejected outright.
+ *
+ * Error messages name only the configuration key and never echo the
+ * passphrase value itself, to avoid leaking secrets.
+ */
+export function validateStellarNetworkPassphrase(value: string): void {
+  if (value.length === 0) {
+    throw new Error("STELLAR_NETWORK_PASSPHRASE must not be empty.");
+  }
+
+  if (value !== value.trim()) {
+    throw new Error(
+      "STELLAR_NETWORK_PASSPHRASE must not contain leading or trailing whitespace.",
+    );
+  }
+
+  if (CONTROL_CHARACTER.test(value)) {
+    throw new Error("STELLAR_NETWORK_PASSPHRASE must not contain control characters.");
+  }
+
+  if (value.length > MAX_NETWORK_PASSPHRASE_LENGTH) {
+    throw new Error(
+      `STELLAR_NETWORK_PASSPHRASE must not exceed ${MAX_NETWORK_PASSPHRASE_LENGTH} characters.`,
+    );
+  }
 }
 
 export function getStellarNetworkFingerprint(): string {

@@ -1,4 +1,5 @@
 import { DecisionBadge } from "@/components/decision-badge";
+import { useEffect, useRef } from "react";
 
 export type EngineDecisionResult = {
   decision: "APPROVE" | "WARN" | "REQUIRE_APPROVAL" | "BLOCK";
@@ -49,11 +50,50 @@ export function engineReasonCodes(result: EngineDecisionResult): string[] {
 }
 
 /**
+ * A concise, screen-reader friendly status for each engine decision. The live
+ * region below announces a decision only when it changes, so each result is
+ * announced once instead of on every re-render.
+ */
+function decisionLiveStatus(decision: EngineDecisionResult["decision"]): string {
+  switch (decision) {
+    case "APPROVE":
+      return "Decision approved. Action is allowed.";
+    case "WARN":
+      return "Decision warning. Action carries risk.";
+    case "BLOCK":
+      return "Decision blocked. Action is not allowed.";
+    case "REQUIRE_APPROVAL":
+      return "Decision requires approval. Operator confirmation needed.";
+    default:
+      return `Decision ${decision}.`;
+  }
+}
+
+/**
  * A view of the engine decision: decision, rule ids and reason codes are shown
  * unchanged, only secret material in free text is redacted. A missing result
  * renders the empty state, never an allow.
  */
 export function DecisionResultView({ result }: { result: EngineDecisionResult | null | undefined }) {
+  const liveRegion = useRef<HTMLDivElement>(null);
+  const announcedDecision = useRef<EngineDecisionResult["decision"] | null>(null);
+
+  // Hooks run unconditionally; the announcement is guarded so an empty state
+  // never announces, and each decision is announced only when it changes.
+  useEffect(() => {
+    if (!result?.decision) {
+      announcedDecision.current = null;
+      if (liveRegion.current) liveRegion.current.textContent = "";
+      return;
+    }
+    if (announcedDecision.current !== result.decision) {
+      announcedDecision.current = result.decision;
+      if (liveRegion.current) {
+        liveRegion.current.textContent = decisionLiveStatus(result.decision);
+      }
+    }
+  }, [result?.decision]);
+
   if (!result || !result.decision) {
     return (
       <p data-testid="decision-empty" className="text-sm text-[hsl(var(--muted-foreground))]">
@@ -67,6 +107,14 @@ export function DecisionResultView({ result }: { result: EngineDecisionResult | 
 
   return (
     <div className="space-y-4 rounded-xl border border-[hsl(var(--border))] p-5">
+      {/* Live status announced to screen readers when the decision changes. */}
+      <div
+        ref={liveRegion}
+        id="fortexa-decision-live-status"
+        aria-live="polite"
+        aria-atomic="true"
+        className="sr-only"
+      ></div>
       <div className="flex items-center justify-between">
         <span data-testid="decision-value" data-decision={result.decision}>
           <DecisionBadge decision={result.decision} />
